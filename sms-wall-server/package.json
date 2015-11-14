@@ -1,0 +1,12 @@
+{
+  "name": "sms-wall-server",
+  "version": "1.0.0",
+  "author": "Conrad Reuter",
+  "dependencies": {
+    "socket.io": "^1.3.7"
+  },
+  "devDependencies": {
+    "body-parser": "^1.14.1",
+    "express": "^4.13.3"
+  }
+}
