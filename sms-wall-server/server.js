@@ -33,6 +33,14 @@ app.delete('/message/:id', function(req, res) {
   });
 });
 
+var welcomeMessage = 'SMS Wall';
+app.put('/welcome', function(req, res) {
+  welcomeMessage = req.body;
+  console.log('New welcome message: ' + welcomeMessage);
+  io.emit('welcome', welcomeMessage);
+  res.status(200).send();
+});
+
 messages.onChange(function(msgs) {
   io.emit('messages', msgs);
 });
@@ -42,5 +50,6 @@ messages.load(function(msgs) {
   server.listen(8080);
   io.on('connection', function(socket) {
     socket.emit('messages', msgs);
+    socket.emit('welcome', welcomeMessage);
   })
 });
