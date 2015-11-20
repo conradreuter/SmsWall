@@ -1,12 +1,25 @@
 package com.conradreuter.smswallmanager;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.ListAdapter;
+import android.widget.ListView;
+import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends ActionBarActivity {
 
@@ -16,6 +29,7 @@ public class MainActivity extends ActionBarActivity {
 
     public static final String EXTRA_BASEADDRESS = "com.conradreuter.smswallmanager.action.BASEADDRESS";
 
+    private final BroadcastReceiver broadcastReceiver = new MainActivityBroadcaseReceiver();
     private Uri baseAddress;
 
     @Override
@@ -29,9 +43,8 @@ public class MainActivity extends ActionBarActivity {
             return;
         }
         setContentView(R.layout.activity_main);
-        if (!MessagesService.isRunning()) {
-            startMessagesService();
-        }
+        startMessagesService();
+        LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, MessagesService.INTENT_FILTER);
     }
 
     private boolean obtainBaseAddress(Bundle savedInstanceState) {
@@ -48,8 +61,12 @@ public class MainActivity extends ActionBarActivity {
 
     private void startMessagesService() {
         Intent intent = new Intent(getBaseContext(), MessagesService.class);
-        intent.setAction(MessagesService.ACTION_SET_BASEADDRESS);
-        intent.putExtra(MessagesService.EXTRA_BASEADDRESS, baseAddress);
+        if (!MessagesService.isRunning()) {
+            intent.setAction(MessagesService.ACTION_INIT);
+            intent.putExtra(MessagesService.EXTRA_BASEADDRESS, baseAddress);
+        } else {
+            intent.setAction(MessagesService.ACTION_MESSAGES);
+        }
         startService(intent);
     }
 
@@ -82,14 +99,49 @@ public class MainActivity extends ActionBarActivity {
     }
 
     private void quit() {
-        if (MessagesService.isRunning()) {
-            stopMessagesService();
-        }
+        stopMessagesService();
         finish();
     }
 
     private void stopMessagesService() {
-        Intent intent = new Intent(getBaseContext(), MessagesService.class);
-        stopService(intent);
+        if (MessagesService.isRunning()) {
+            Intent intent = new Intent(getBaseContext(), MessagesService.class);
+            stopService(intent);
+        }
+    }
+
+    private class MainActivityBroadcaseReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (MessagesService.BROADCAST_MESSAGES.equals(action)) {
+                ArrayList<Message> messages = intent.getParcelableArrayListExtra(MessagesService.EXTRA_MESSAGES);
+                handleMessages(messages);
+            }
+        }
+    }
+
+    private void handleMessages(ArrayList<Message> messages) {
+        Log.d(TAG, String.format("Received %d message(s)", messages.size()));
+        ListView messagesListView = (ListView)findViewById(R.id.messagesListView);
+        messagesListView.setAdapter(new MessageListAdapter(messages));
+    }
+
+    private class MessageListAdapter extends ArrayAdapter<Message> {
+
+        public MessageListAdapter(List<Message> messages) {
+            super(MainActivity.this, -1, messages);
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            Message message = getItem(position);
+            LayoutInflater layoutInflater = (LayoutInflater)getContext().getSystemService(LAYOUT_INFLATER_SERVICE);
+            View messageView = layoutInflater.inflate(R.layout.message_list_item, parent, false);
+            TextView textTextView = (TextView)messageView.findViewById(R.id.textTextView);
+            textTextView.setText(message.getText());
+            return messageView;
+        }
     }
 }

@@ -8,12 +8,9 @@ import android.net.Uri;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.StringEntity;
@@ -24,6 +21,7 @@ import org.apache.http.params.HttpParams;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
 
 public final class ServerCommunicationService extends IntentService {
 
@@ -31,20 +29,26 @@ public final class ServerCommunicationService extends IntentService {
 
     private static final String ACTION_TEST_CONNECTION = "com.conradreuter.smswallmanager.action.TEST_CONNECTION";
     private static final String ACTION_PUT_MESSAGE = "com.conradreuter.smswallmanager.action.PUT_MESSAGE";
+    private static final String ACTION_GET_MESSAGES = "com.conradreuter.smswallmanager.action.GET_MESSAGES";
 
-    public static final String BROADCAST_CONNECTION_SUCCEEDED = "com.conradreuter.smswallmanager.action.CONNECTION_SUCCEEDED";
-    public static final String BROADCAST_CONNECTION_FAILED = "com.conradreuter.smswallmanager.action.CONNECTION_FAILED";
+    public static final String BROADCAST_CONNECTION_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.CONNECTION_SUCCEEDED";
+    public static final String BROADCAST_CONNECTION_FAILED = "com.conradreuter.smswallmanager.broadcast.CONNECTION_FAILED";
+    public static final String BROADCAST_PUT_MESSAGE_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.PUT_MESSAGE_SUCCEEDED";
+    public static final String BROADCAST_GET_MESSAGES_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.GET_MESSAGES_SUCCEEDED";
 
     public static final IntentFilter INTENT_FILTER = new IntentFilter();
     static {
         INTENT_FILTER.addAction(BROADCAST_CONNECTION_SUCCEEDED);
         INTENT_FILTER.addAction(BROADCAST_CONNECTION_FAILED);
+        INTENT_FILTER.addAction(BROADCAST_PUT_MESSAGE_SUCCEEDED);
+        INTENT_FILTER.addAction(BROADCAST_GET_MESSAGES_SUCCEEDED);
     }
 
     private static final String EXTRA_SERVERADDRESS = "com.conradreuter.smswallmanager.extra.SERVERADDRESS";
-    private static final String EXTRA_MESSAGE = "com.conradreuter.smswallmanager.extra.MESSAGE";
     public static final String EXTRA_BASEADDRESS = "com.conradreuter.smswallmanager.extra.BASEADDRESS";
     public static final String EXTRA_ERRORMESSAGE = "com.conradreuter.smswallmanager.extra.ERROR";
+    public static final String EXTRA_MESSAGE = "com.conradreuter.smswallmanager.extra.MESSAGE";
+    public static final String EXTRA_MESSAGES = "com.conradreuter.smswallmanager.extra.MESSAGES";
 
     private static final int TIMEOUT = 1000;
 
@@ -59,6 +63,13 @@ public final class ServerCommunicationService extends IntentService {
         Intent intent = new Intent(context, ServerCommunicationService.class);
         intent.setAction(ACTION_PUT_MESSAGE);
         intent.putExtra(EXTRA_MESSAGE, message);
+        intent.putExtra(EXTRA_BASEADDRESS, baseAddress);
+        context.startService(intent);
+    }
+
+    public static void startActionGetMessages(Context context, Uri baseAddress) {
+        Intent intent = new Intent(context, ServerCommunicationService.class);
+        intent.setAction(ACTION_GET_MESSAGES);
         intent.putExtra(EXTRA_BASEADDRESS, baseAddress);
         context.startService(intent);
     }
@@ -78,6 +89,9 @@ public final class ServerCommunicationService extends IntentService {
                 Message message = intent.getParcelableExtra(EXTRA_MESSAGE);
                 Uri baseAddress = intent.getParcelableExtra(EXTRA_BASEADDRESS);
                 handleActionPutMessage(message, baseAddress);
+            } else if (ACTION_GET_MESSAGES.equals(action)) {
+                Uri baseAddress = intent.getParcelableExtra(EXTRA_BASEADDRESS);
+                handleActionGetMessages(baseAddress);
             }
         }
     }
@@ -124,25 +138,51 @@ public final class ServerCommunicationService extends IntentService {
 
     private void handleActionPutMessage(Message message, Uri baseAddress) {
         Log.d(TAG, String.format("Trying to put message %s to %s", message, baseAddress));
-        HttpResponse response;
+        Message returnedMessage;
         try {
             HttpPut request = new HttpPut();
             request.setEntity(new StringEntity(message.getText()));
-            response = sendRequest(request, baseAddress, "message");
+            HttpResponse response = sendRequest(request, baseAddress, "message");
+            if (!checkStatusCode(response, HttpStatus.SC_CREATED)) return;
+            returnedMessage = Message.fromHttpResponse(response);
         } catch (Exception e) {
             Log.e(TAG, String.format("Putting message %s failed", message), e);
             return;
         }
-        if (checkStatusCode(response, HttpStatus.SC_CREATED)) {
-            Log.d(TAG, String.format("Putting message %s succeeded", message));
+        Log.d(TAG, String.format("Putting message %s succeeded", message));
+        broadcastNewMessage(returnedMessage);
+    }
+
+    private void broadcastNewMessage(Message message) {
+        Intent intent = new Intent(BROADCAST_PUT_MESSAGE_SUCCEEDED);
+        intent.putExtra(EXTRA_MESSAGE, message);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
+
+    private void handleActionGetMessages(Uri baseAddress) {
+        Log.d(TAG, String.format("Trying to get messages from %s", baseAddress));
+        ArrayList<Message> messages;
+        try {
+            HttpGet request = new HttpGet();
+            HttpResponse response = sendRequest(request, baseAddress, "message");
+            if (!checkStatusCode(response, HttpStatus.SC_OK)) return;
+            messages = Message.multipleFromHttpResponse(response);
+        } catch (Exception e) {
+            Log.e(TAG, "Getting messages failed", e);
+            return;
         }
+        Log.d(TAG, "Getting messages succeeded");
+        broadcastMessages(messages);
+    }
+
+    private void broadcastMessages(ArrayList<Message> messages) {
+        Intent intent = new Intent(BROADCAST_GET_MESSAGES_SUCCEEDED);
+        intent.putParcelableArrayListExtra(EXTRA_MESSAGES, messages);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
     private HttpResponse sendRequest(HttpRequestBase request, Uri baseAddress, String path) throws IOException {
-        Uri uri = baseAddress
-                .buildUpon()
-                .appendPath(path)
-                .build();
+        Uri uri = baseAddress.buildUpon().appendPath(path).build();
         request.setURI(URI.create(uri.toString()));
         HttpParams httpParams = new BasicHttpParams();
         HttpConnectionParams.setConnectionTimeout(httpParams, TIMEOUT);

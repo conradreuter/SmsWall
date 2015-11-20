@@ -10,6 +10,9 @@ import org.apache.http.HttpResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 public final class Message implements Parcelable {
 
@@ -48,6 +51,23 @@ public final class Message implements Parcelable {
     public static Message fromHttpResponse(HttpResponse response) throws IOException {
         InputStream stream = response.getEntity().getContent();
         JsonReader jsonReader = new JsonReader(new InputStreamReader(stream));
+        return fromJson(jsonReader);
+    }
+
+    public static ArrayList<Message> multipleFromHttpResponse(HttpResponse response) throws IOException {
+        InputStream stream = response.getEntity().getContent();
+        JsonReader jsonReader = new JsonReader(new InputStreamReader(stream));
+        jsonReader.beginArray();
+        ArrayList<Message> messages = new ArrayList<Message>();
+        while (jsonReader.hasNext()) {
+            Message message = fromJson(jsonReader);
+            messages.add(message);
+        }
+        jsonReader.endArray();
+        return messages;
+    }
+
+    public static Message fromJson(JsonReader jsonReader) throws IOException {
         jsonReader.beginObject();
         Message message = new Message(null, null, null);
         while (jsonReader.hasNext()) {
