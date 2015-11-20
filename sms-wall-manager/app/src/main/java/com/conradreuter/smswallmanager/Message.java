@@ -1,29 +1,33 @@
 package com.conradreuter.smswallmanager;
 
-import android.content.Intent;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.telephony.SmsMessage;
 import android.util.JsonReader;
-import android.util.Log;
 
 import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.DefaultHttpClient;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URI;
 
-public final class Message {
+public final class Message implements Parcelable {
 
-    private static final String TAG = Message.class.getSimpleName();
+    public static final Parcelable.Creator<Message> CREATOR = new Parcelable.Creator<Message>() {
 
-    private static final String EXTRA_ID = "com.conradreuter.smswallmanager.extra.MESSAGE_ID";
-    private static final String EXTRA_SENDER = "com.conradreuter.smswallmanager.extra.MESSAGE_SENDER";
-    private static final String EXTRA_TEXT = "com.conradreuter.smswallmanager.extra.MESSAGE_TEXT";
+        @Override
+        public Message createFromParcel(Parcel parcel) {
+            int id = parcel.readInt();
+            String sender = parcel.readString();
+            String text = parcel.readString();
+            return new Message(id, sender, text);
+        }
+
+        @Override
+        public Message[] newArray(int size) {
+            return new Message[size];
+        }
+    };
 
     private Integer id;
     private String sender;
@@ -62,11 +66,17 @@ public final class Message {
         return message;
     }
 
-    public static Message fromIntent(Intent intent) {
-        int id = intent.getIntExtra(EXTRA_ID, -1);
-        String sender = intent.getStringExtra(EXTRA_SENDER);
-        String text = intent.getStringExtra(EXTRA_TEXT);
-        return new Message(id == -1 ?  null : id, sender, text);
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(Parcel parcel, int flags) {
+        int id = getId() != null ? getId().intValue() : -1;
+        parcel.writeInt(id);
+        parcel.writeString(getSender());
+        parcel.writeString(getText());
     }
 
     public Integer getId() {
@@ -81,30 +91,8 @@ public final class Message {
         return text;
     }
 
-    public void fillIntent(Intent intent) {
-        intent.putExtra(EXTRA_ID, getId());
-        intent.putExtra(EXTRA_SENDER, getSender());
-        intent.putExtra(EXTRA_TEXT, getText());
-    }
-
-    public boolean put(URI baseAddress) {
-        HttpResponse response;
-        try {
-            HttpPut request = new HttpPut(baseAddress.resolve("/message"));
-            request.setEntity(new StringEntity(getText()));
-            response = new DefaultHttpClient().execute(request);
-        } catch (Exception e) {
-            Log.e(TAG, "Putting message failed", e);
-            return false;
-        }
-        if (response.getStatusLine().getStatusCode() != HttpStatus.SC_CREATED) {
-            Log.e(TAG, String.format(
-                    "Putting message failed with unexpected status code %d (reason: %s)",
-                    response.getStatusLine().getStatusCode(),
-                    response.getStatusLine().getReasonPhrase()));
-            return false;
-        }
-        Log.d(TAG, "Putting message succeeded");
-        return true;
+    @Override
+    public String toString() {
+        return String.format("\"%s\" from %s", getText(), getSender());
     }
 }

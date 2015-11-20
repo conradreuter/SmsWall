@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.ActionBarActivity;
@@ -12,8 +13,6 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-
-import java.net.URI;
 
 public final class ConnectionActivity extends ActionBarActivity {
 
@@ -26,7 +25,7 @@ public final class ConnectionActivity extends ActionBarActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_connection);
         attachEventListeners();
-        LocalBroadcastManager.getInstance(this).registerReceiver(connectionBroadcastReceiver, ConnectionService.INTENT_FILTER);
+        LocalBroadcastManager.getInstance(this).registerReceiver(connectionBroadcastReceiver, ServerCommunicationService.INTENT_FILTER);
     }
 
     @Override
@@ -48,7 +47,7 @@ public final class ConnectionActivity extends ActionBarActivity {
     private void connect() {
         EditText serverAddressEditText = (EditText)findViewById(R.id.serverAddressEditText);
         String serverAddress = serverAddressEditText.getText().toString();
-        ConnectionService.startActionConnect(this, serverAddress);
+        ServerCommunicationService.startActionTestConnection(this, serverAddress);
     }
 
     private class ConnectionBroadcastReceiver extends BroadcastReceiver {
@@ -56,21 +55,21 @@ public final class ConnectionActivity extends ActionBarActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if (ConnectionService.BROADCAST_CONNECTION_SUCCEEDED.equals(action)) {
-                URI baseAddress = URI.create(intent.getStringExtra(ConnectionService.EXTRA_BASEADDRESS));
+            if (ServerCommunicationService.BROADCAST_CONNECTION_SUCCEEDED.equals(action)) {
+                Uri baseAddress = intent.getParcelableExtra(ServerCommunicationService.EXTRA_BASEADDRESS);
                 handleConnectionSucceeded(baseAddress);
-            } else if (ConnectionService.BROADCAST_CONNECTION_FAILED.equals(action)) {
-                String baseAddress = intent.getStringExtra(ConnectionService.EXTRA_BASEADDRESS);
-                String errorMessage = intent.getStringExtra(ConnectionService.EXTRA_ERRORMESSAGE);
+            } else if (ServerCommunicationService.BROADCAST_CONNECTION_FAILED.equals(action)) {
+                String baseAddress = intent.getStringExtra(ServerCommunicationService.EXTRA_BASEADDRESS);
+                String errorMessage = intent.getStringExtra(ServerCommunicationService.EXTRA_ERRORMESSAGE);
                 handleConnectionFailed(baseAddress, errorMessage);
             }
         }
     }
 
-    private void handleConnectionSucceeded(URI baseAddress) {
-        Log.d(TAG, String.format("Connection to %s succeeded", baseAddress.toString()));
+    private void handleConnectionSucceeded(Uri baseAddress) {
+        Log.d(TAG, String.format("Connection to %s succeeded", baseAddress));
         Intent intent = new Intent(this, MainActivity.class);
-        intent.putExtra(MainActivity.EXTRA_BASEADDRESS, baseAddress.toString());
+        intent.putExtra(MainActivity.EXTRA_BASEADDRESS, baseAddress);
         startActivity(intent);
         finish();
     }

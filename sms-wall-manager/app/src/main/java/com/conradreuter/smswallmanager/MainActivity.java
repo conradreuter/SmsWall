@@ -1,14 +1,12 @@
 package com.conradreuter.smswallmanager;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
-import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
-
-import java.net.URI;
+import android.view.Menu;
+import android.view.MenuItem;
 
 public class MainActivity extends ActionBarActivity {
 
@@ -18,34 +16,41 @@ public class MainActivity extends ActionBarActivity {
 
     public static final String EXTRA_BASEADDRESS = "com.conradreuter.smswallmanager.action.BASEADDRESS";
 
-    private final BroadcastReceiver incomingMessageBroadcastReceiver = new IncomingMessageBroadcaseReceiver();
-    private URI baseAddress;
+    private Uri baseAddress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (obtainBaseAddress(savedInstanceState)) {
-            Log.d(TAG, String.format("Base address %s found", baseAddress.toString()));
+            Log.d(TAG, String.format("Base address %s found", baseAddress));
         } else {
             Log.d(TAG, "No base address found. Switching to connection activity");
             switchToConnectionActivity();
             return;
         }
         setContentView(R.layout.activity_main);
-        LocalBroadcastManager.getInstance(this).registerReceiver(incomingMessageBroadcastReceiver, SmsBroadcastReceiver.INTENT_FILTER);
+        if (!MessagesService.isRunning()) {
+            startMessagesService();
+        }
     }
 
     private boolean obtainBaseAddress(Bundle savedInstanceState) {
         baseAddress = null;
         if (getIntent().hasExtra(EXTRA_BASEADDRESS)) {
-            baseAddress = URI.create(getIntent().getStringExtra(EXTRA_BASEADDRESS));
+            baseAddress = getIntent().getParcelableExtra(EXTRA_BASEADDRESS);
+        } else if (MessagesService.isRunning()) {
+            baseAddress = MessagesService.getBaseAddress();
         } else if (savedInstanceState != null) {
-            String baseAddressString = savedInstanceState.getString(STATE_BASEADDRESS);
-            if (baseAddressString != null) {
-                baseAddress = URI.create(baseAddressString);
-            }
+            baseAddress = savedInstanceState.getParcelable(STATE_BASEADDRESS);
         }
         return baseAddress != null;
+    }
+
+    private void startMessagesService() {
+        Intent intent = new Intent(getBaseContext(), MessagesService.class);
+        intent.setAction(MessagesService.ACTION_SET_BASEADDRESS);
+        intent.putExtra(MessagesService.EXTRA_BASEADDRESS, baseAddress);
+        startService(intent);
     }
 
     private void switchToConnectionActivity() {
@@ -55,35 +60,36 @@ public class MainActivity extends ActionBarActivity {
     }
 
     @Override
-    protected void onStop() {
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(incomingMessageBroadcastReceiver);
-        super.onStop();
-    }
-
-    @Override
     protected void onSaveInstanceState(Bundle savedInstanceState) {
         if (baseAddress != null) {
-            savedInstanceState.putString(STATE_BASEADDRESS, baseAddress.toString());
+            savedInstanceState.putParcelable(STATE_BASEADDRESS, baseAddress);
         }
         super.onSaveInstanceState(savedInstanceState);
     }
 
-    private class IncomingMessageBroadcaseReceiver extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (SmsBroadcastReceiver.BROADCAST_INCOMING_MESSAGE.equals(action)) {
-                Message message = Message.fromIntent(intent);
-                handleIncomingMessage(message);
-            }
-        }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
     }
 
-    private void handleIncomingMessage(Message message) {
-        Log.d(TAG, String.format(
-                "Incoming message %s from %s",
-                message.getText(),
-                message.getSender()));
-        MessagesService.startActionPutMessage(this, message, baseAddress);
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.quit) {
+            quit();
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    private void quit() {
+        if (MessagesService.isRunning()) {
+            stopMessagesService();
+        }
+        finish();
+    }
+
+    private void stopMessagesService() {
+        Intent intent = new Intent(getBaseContext(), MessagesService.class);
+        stopService(intent);
     }
 }

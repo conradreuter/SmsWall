@@ -18,6 +18,8 @@ public final class SmsBroadcastReceiver extends BroadcastReceiver {
 
     public static final String BROADCAST_INCOMING_MESSAGE = "com.conradreuter.smswallmanager.action.INCOMING_MESSAGE";
 
+    public static final String EXTRA_MESSAGE = "com.conradreuter.smswallmanager.extra.MESSAGE";
+
     public static final IntentFilter INTENT_FILTER = new IntentFilter(BROADCAST_INCOMING_MESSAGE);
 
     @Override
@@ -41,12 +43,9 @@ public final class SmsBroadcastReceiver extends BroadcastReceiver {
     }
 
     private void broadcastMessage(Context context, Message message) {
-        Log.d(TAG, String.format(
-                "Incoming message %s from %s",
-                message.getText(),
-                message.getSender()));
+        Log.d(TAG, String.format("Incoming message %s ", message));
         Intent intent = new Intent(BROADCAST_INCOMING_MESSAGE);
-        message.fillIntent(intent);
+        intent.putExtra(EXTRA_MESSAGE, message);
         LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
     }
 }
