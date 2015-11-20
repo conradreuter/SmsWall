@@ -1,4 +1,6 @@
+const _ = require('lodash');
 const messages = require('./messages');
+const getIpAddresses = require('./ip-addresses');
 
 const app = require('express')();
 const server = require('http').Server(app);
@@ -10,11 +12,12 @@ app.get('/', function(req, res) {
 });
 
 app.get('/ping', function(req, res) {
-  res.send("pong");
+  console.log('Received a ping from ' + req.ip + '.');
+  res.send('pong');
 });
 
 app.get('/message', function(req, res) {
-  messages.get(res.send.bind(res));
+  messages.get(_.bindKey(res, 'send'));
 });
 
 app.put('/message', function(req, res) {
@@ -52,6 +55,10 @@ messages.onChange(function(msgs) {
 messages.load(function(msgs) {
   console.log('Loaded ' + msgs.length + ' message(s).');
   server.listen(8080);
+  _.forEach(getIpAddresses(), function(pair) {
+    console.log('Found IP address ' + pair.address +
+                ' on interface ' + pair.interface +  '.');
+  });
   io.on('connection', function(socket) {
     socket.emit('messages', msgs);
     socket.emit('welcome', welcomeMessage);

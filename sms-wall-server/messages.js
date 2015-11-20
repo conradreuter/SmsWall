@@ -8,6 +8,7 @@ module.exports = {
 
 const FILENAME = 'messages.txt';
 const fs = require('fs');
+const _ = require('lodash');
 
 var nextId = 1;
 var messages = [];
@@ -16,7 +17,7 @@ var changeCallbacks = [];
 function loadMessages(callback) {
   fs.readFile(FILENAME, function(err, data) {
     messages = (!err) ? JSON.parse(data) : [];
-    ids = messages.map(function(msg) { return msg.id; });
+    ids = _.map(messages, 'id');
     nextId = 1 + Math.max(0, ...ids);
     callback(messages);
   });
@@ -27,7 +28,7 @@ function saveMessages(callback) {
   fs.writeFile(FILENAME, data, function(err) {
     if (err) console.log(err);
     callback();
-    changeCallbacks.forEach(function(cb) { cb(messages); });
+    _.forEach(changeCallbacks, function(cb) { cb(messages); });
   });
 }
 
@@ -46,20 +47,16 @@ function putMessage(text, callback) {
     timestamp: Date.now()
   };
   messages.push(message);
-  saveMessages(function() {
-    callback(message);
-  });
+  saveMessages(_.partial(callback, message));
 }
 
 function deleteMessage(id, callback) {
-  var ids = messages.map(function(msg) { return msg.id; });
+  var ids = _.map(messages, 'id');
   var index = ids.indexOf(id);
   if (index > -1) {
     var message = messages[index];
-    messages = messages.filter(function(msg) { return msg !== message; });
-    saveMessages(function() {
-      callback(message);
-    });
+    messages = _.without(messages, message);
+    saveMessages(_.partial(callback, message));
   } else {
     callback(undefined);
   }
