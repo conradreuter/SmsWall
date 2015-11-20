@@ -11,8 +11,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
 
 public final class Message implements Parcelable {
 
@@ -20,10 +18,12 @@ public final class Message implements Parcelable {
 
         @Override
         public Message createFromParcel(Parcel parcel) {
-            int id = parcel.readInt();
-            String sender = parcel.readString();
-            String text = parcel.readString();
-            return new Message(id, sender, text);
+            Message message = new Message();
+            message.id = parcel.readInt();
+            message.timestamp = parcel.readLong();
+            message.sender = parcel.readString();
+            message.text = parcel.readString();
+            return message;
         }
 
         @Override
@@ -33,19 +33,20 @@ public final class Message implements Parcelable {
     };
 
     private Integer id;
+    private Long timestamp;
     private String sender;
     private String text;
 
-    private Message(Integer id, String sender, String text) {
-        this.id = id;
-        this.sender = sender;
-        this.text = text;
+    private Message() {
     }
 
     public static Message fromSms(SmsMessage smsMessage) {
         String sender = smsMessage.getDisplayOriginatingAddress();
         String text = smsMessage.getDisplayMessageBody();
-        return new Message(null, sender, text);
+        Message message = new Message();
+        message.sender = sender;
+        message.text = text;
+        return message;
     }
 
     public static Message fromHttpResponse(HttpResponse response) throws IOException {
@@ -69,11 +70,13 @@ public final class Message implements Parcelable {
 
     public static Message fromJson(JsonReader jsonReader) throws IOException {
         jsonReader.beginObject();
-        Message message = new Message(null, null, null);
+        Message message = new Message();
         while (jsonReader.hasNext()) {
             String propertyName = jsonReader.nextName();
             if (propertyName.equals("id")) {
                 message.id = jsonReader.nextInt();
+            } else if (propertyName.equals("timestamp")) {
+                message.timestamp = jsonReader.nextLong();
             } else if (propertyName.equals("sender")) {
                 message.sender = jsonReader.nextString();
             } else if (propertyName.equals("text")) {
@@ -93,14 +96,18 @@ public final class Message implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel parcel, int flags) {
-        int id = getId() != null ? getId().intValue() : -1;
-        parcel.writeInt(id);
+        parcel.writeInt(getId());
+        parcel.writeLong(getTimestamp());
         parcel.writeString(getSender());
         parcel.writeString(getText());
     }
 
-    public Integer getId() {
-        return id;
+    public int getId() {
+        return id != null ? id.intValue() : -1;
+    }
+
+    public long getTimestamp() {
+        return timestamp != null ? timestamp.longValue() : -1L;
     }
 
     public String getSender() {

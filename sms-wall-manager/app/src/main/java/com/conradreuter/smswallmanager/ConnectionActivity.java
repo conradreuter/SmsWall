@@ -77,7 +77,7 @@ public final class ConnectionActivity extends ActionBarActivity {
     private void handleConnectionFailed(String baseAddress, String errorMessage) {
         Log.e(TAG, String.format("Connection to %s failed: %s", baseAddress, errorMessage));
         new AlertDialog.Builder(this)
-                .setTitle("Connection failed!")
+                .setTitle(R.string.connection_failed)
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .setMessage(errorMessage)
                 .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {

@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">SMS Wall Manager</string>
     <string name="quit">Quit</string>
+    <string name="connection_failed">Connection failed!</string>
+    <string name="delete_message">Delete this message?</string>
 </resources>

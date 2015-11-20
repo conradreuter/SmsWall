@@ -1,7 +1,9 @@
 package com.conradreuter.smswallmanager;
 
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -13,8 +15,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.ListAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -45,6 +47,15 @@ public class MainActivity extends ActionBarActivity {
         setContentView(R.layout.activity_main);
         startMessagesService();
         LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, MessagesService.INTENT_FILTER);
+        ListView messagesListView = (ListView)findViewById(R.id.messagesListView);
+        messagesListView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
+            @Override
+            public boolean onItemLongClick(AdapterView<?> adapterView, View view, int position, long id) {
+                Message message = (Message) adapterView.getItemAtPosition(position);
+                handleOnMessageLongClick(message);
+                return true;
+            }
+        });
     }
 
     private boolean obtainBaseAddress(Bundle savedInstanceState) {
@@ -65,7 +76,7 @@ public class MainActivity extends ActionBarActivity {
             intent.setAction(MessagesService.ACTION_INIT);
             intent.putExtra(MessagesService.EXTRA_BASEADDRESS, baseAddress);
         } else {
-            intent.setAction(MessagesService.ACTION_MESSAGES);
+            intent.setAction(MessagesService.ACTION_BROADCAST_MESSAGES);
         }
         startService(intent);
     }
@@ -74,6 +85,32 @@ public class MainActivity extends ActionBarActivity {
         Intent intent = new Intent(this, ConnectionActivity.class);
         startActivity(intent);
         finish();
+    }
+
+    private void handleOnMessageLongClick(final Message message) {
+        Log.d(TAG, String.format("Long clicked on message with ID %d", message.getId()));
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.delete_message)
+                .setPositiveButton(android.R.string.yes, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        deleteMessage(message);
+                    }
+                })
+                .setNegativeButton(android.R.string.no, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                    }
+                })
+                .create()
+                .show();
+    }
+
+    private void deleteMessage(Message message) {
+        Intent intent = new Intent(getBaseContext(), MessagesService.class);
+        intent.setAction(MessagesService.ACTION_DELETE_MESSAGE);
+        intent.putExtra(MessagesService.EXTRA_MESSAGE, message);
+        startService(intent);
     }
 
     @Override

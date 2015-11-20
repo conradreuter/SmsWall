@@ -13,17 +13,22 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
 
 public final class MessagesService extends Service {
 
     private static final String TAG = MessagesService.class.getSimpleName();
 
     public static final String ACTION_INIT = "com.conradreuter.smswallmanager.action.INIT";
-    public static final String ACTION_MESSAGES = "com.conradreuter.smswallmanager.action.MESSAGES";
+    public static final String ACTION_BROADCAST_MESSAGES = "com.conradreuter.smswallmanager.action.BROADCAST_MESSAGES";
+    public static final String ACTION_DELETE_MESSAGE = "com.conradreuter.smswallmanager.action.DELETE_MESSAGE";
 
     public static final String BROADCAST_MESSAGES = "com.conradreuter.smswallmanager.broadcast.MESSAGES";
 
     public static final String EXTRA_BASEADDRESS = "com.conradreuter.smswallmanager.extra.BASEADDRESS";
+    public static final String EXTRA_MESSAGE = "com.conradreuter.smswallmanager.extra.MESSAGE";
     public static final String EXTRA_MESSAGES = "com.conradreuter.smswallmanager.extra.MESSAGES";
 
     public static final IntentFilter INTENT_FILTER = new IntentFilter(BROADCAST_MESSAGES);
@@ -80,8 +85,11 @@ public final class MessagesService extends Service {
         if (ACTION_INIT.equals(action)) {
             Uri baseAddress = intent.getParcelableExtra(EXTRA_BASEADDRESS);
             handleInit(baseAddress);
-        } else if (ACTION_MESSAGES.equals(action)) {
-            handleMessages();
+        } else if (ACTION_BROADCAST_MESSAGES.equals(action)) {
+            handleBroadcastMessages();
+        } else if (ACTION_DELETE_MESSAGE.equals(action)) {
+            Message message = intent.getParcelableExtra(EXTRA_MESSAGE);
+            handleDeleteMessage(message);
         }
     }
 
@@ -91,9 +99,18 @@ public final class MessagesService extends Service {
         ServerCommunicationService.startActionGetMessages(this, baseAddress);
     }
 
-    private void handleMessages() {
+    private void handleBroadcastMessages() {
         Log.d(TAG, "Broadcasting messages");
         broadcastMessages();
+    }
+
+    private void handleDeleteMessage(Message message) {
+        Log.d(TAG, String.format("Deleting message %d", message.getId()));
+        if (baseAddress == null) {
+            Log.e(TAG, "Cannot delete message, because the base address is not set");
+            return;
+        }
+        ServerCommunicationService.startActionDeleteMessage(this, message, baseAddress);
     }
 
     @Override
@@ -112,6 +129,9 @@ public final class MessagesService extends Service {
             } else if (ServerCommunicationService.BROADCAST_PUT_MESSAGE_SUCCEEDED.equals(action)) {
                 Message message = intent.getParcelableExtra(SmsBroadcastReceiver.EXTRA_MESSAGE);
                 handlePutMessageSucceeded(message);
+            } else if (ServerCommunicationService.BROADCAST_DELETE_MESSAGE_SUCCEEDED.equals(action)) {
+                Message message = intent.getParcelableExtra(SmsBroadcastReceiver.EXTRA_MESSAGE);
+                handleDeleteMessageSucceeded(message);
             } else if (ServerCommunicationService.BROADCAST_GET_MESSAGES_SUCCEEDED.equals(action)) {
                 ArrayList<Message> messages = intent.getParcelableArrayListExtra(ServerCommunicationService.EXTRA_MESSAGES);
                 handleGetMessagesSucceeded(messages);
@@ -131,14 +151,36 @@ public final class MessagesService extends Service {
 
     private void handlePutMessageSucceeded(Message message) {
         Log.d(TAG, String.format("New message %s", message));
-        messages.add(message);
+        messages.add(0, message);
+        orderMessages();
+        broadcastMessages();
+    }
+
+    private void handleDeleteMessageSucceeded(Message message) {
+        Log.d(TAG, String.format("Deleted message %d", message.getId()));
+        for (Iterator<Message> iterator = messages.listIterator(); iterator.hasNext();) {
+            Message currentMessage = iterator.next();
+            if (currentMessage.getId() == message.getId()) {
+                iterator.remove();
+            }
+        }
         broadcastMessages();
     }
 
     private void handleGetMessagesSucceeded(ArrayList<Message> messages) {
         Log.d(TAG, String.format("Updated messages (count: %d)", messages.size()));
         this.messages = messages;
+        orderMessages();
         broadcastMessages();
+    }
+
+    private void orderMessages() {
+        Collections.sort(messages, new Comparator<Message>() {
+            @Override
+            public int compare(Message message, Message otherMessage) {
+                return (int)(otherMessage.getTimestamp() - message.getTimestamp());
+            }
+        });
     }
 
     private void broadcastMessages() {

@@ -10,6 +10,7 @@ import android.util.Log;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
@@ -29,11 +30,13 @@ public final class ServerCommunicationService extends IntentService {
 
     private static final String ACTION_TEST_CONNECTION = "com.conradreuter.smswallmanager.action.TEST_CONNECTION";
     private static final String ACTION_PUT_MESSAGE = "com.conradreuter.smswallmanager.action.PUT_MESSAGE";
+    private static final String ACTION_DELETE_MESSAGE = "com.conradreuter.smswallmanager.action.DELETE_MESSAGE";
     private static final String ACTION_GET_MESSAGES = "com.conradreuter.smswallmanager.action.GET_MESSAGES";
 
     public static final String BROADCAST_CONNECTION_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.CONNECTION_SUCCEEDED";
     public static final String BROADCAST_CONNECTION_FAILED = "com.conradreuter.smswallmanager.broadcast.CONNECTION_FAILED";
     public static final String BROADCAST_PUT_MESSAGE_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.PUT_MESSAGE_SUCCEEDED";
+    public static final String BROADCAST_DELETE_MESSAGE_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.DELETE_MESSAGE_SUCCEEDED";
     public static final String BROADCAST_GET_MESSAGES_SUCCEEDED = "com.conradreuter.smswallmanager.broadcast.GET_MESSAGES_SUCCEEDED";
 
     public static final IntentFilter INTENT_FILTER = new IntentFilter();
@@ -41,6 +44,7 @@ public final class ServerCommunicationService extends IntentService {
         INTENT_FILTER.addAction(BROADCAST_CONNECTION_SUCCEEDED);
         INTENT_FILTER.addAction(BROADCAST_CONNECTION_FAILED);
         INTENT_FILTER.addAction(BROADCAST_PUT_MESSAGE_SUCCEEDED);
+        INTENT_FILTER.addAction(BROADCAST_DELETE_MESSAGE_SUCCEEDED);
         INTENT_FILTER.addAction(BROADCAST_GET_MESSAGES_SUCCEEDED);
     }
 
@@ -62,6 +66,14 @@ public final class ServerCommunicationService extends IntentService {
     public static void startActionPutMessage(Context context, Message message, Uri baseAddress) {
         Intent intent = new Intent(context, ServerCommunicationService.class);
         intent.setAction(ACTION_PUT_MESSAGE);
+        intent.putExtra(EXTRA_MESSAGE, message);
+        intent.putExtra(EXTRA_BASEADDRESS, baseAddress);
+        context.startService(intent);
+    }
+
+    public static void startActionDeleteMessage(Context context, Message message, Uri baseAddress) {
+        Intent intent = new Intent(context, ServerCommunicationService.class);
+        intent.setAction(ACTION_DELETE_MESSAGE);
         intent.putExtra(EXTRA_MESSAGE, message);
         intent.putExtra(EXTRA_BASEADDRESS, baseAddress);
         context.startService(intent);
@@ -89,6 +101,10 @@ public final class ServerCommunicationService extends IntentService {
                 Message message = intent.getParcelableExtra(EXTRA_MESSAGE);
                 Uri baseAddress = intent.getParcelableExtra(EXTRA_BASEADDRESS);
                 handleActionPutMessage(message, baseAddress);
+            } else if (ACTION_DELETE_MESSAGE.equals(action)) {
+                Message message = intent.getParcelableExtra(EXTRA_MESSAGE);
+                Uri baseAddress = intent.getParcelableExtra(EXTRA_BASEADDRESS);
+                handleActionDeleteMessage(message, baseAddress);
             } else if (ACTION_GET_MESSAGES.equals(action)) {
                 Uri baseAddress = intent.getParcelableExtra(EXTRA_BASEADDRESS);
                 handleActionGetMessages(baseAddress);
@@ -150,11 +166,34 @@ public final class ServerCommunicationService extends IntentService {
             return;
         }
         Log.d(TAG, String.format("Putting message %s succeeded", message));
-        broadcastNewMessage(returnedMessage);
+        broadcastPutMessageSucceeded(returnedMessage);
     }
 
-    private void broadcastNewMessage(Message message) {
+    private void broadcastPutMessageSucceeded(Message message) {
         Intent intent = new Intent(BROADCAST_PUT_MESSAGE_SUCCEEDED);
+        intent.putExtra(EXTRA_MESSAGE, message);
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+    }
+
+    private void handleActionDeleteMessage(Message message, Uri baseAddress) {
+        Log.d(TAG, String.format("Trying to delete message %d from %s", message.getId(), baseAddress));
+        Message returnedMessage;
+        try {
+            HttpDelete request = new HttpDelete();
+            String path = String.format("message/%d", message.getId());
+            HttpResponse response = sendRequest(request, baseAddress, path);
+            if (!checkStatusCode(response, HttpStatus.SC_OK)) return;
+            returnedMessage = Message.fromHttpResponse(response);
+        } catch (Exception e) {
+            Log.e(TAG, String.format("Deleting message %d failed", message.getId()), e);
+            return;
+        }
+        Log.d(TAG, String.format("Deleting message %d succeeded", message.getId()));
+        broadcastDeleteMessageSucceeded(returnedMessage);
+    }
+
+    private void broadcastDeleteMessageSucceeded(Message message) {
+        Intent intent = new Intent(BROADCAST_DELETE_MESSAGE_SUCCEEDED);
         intent.putExtra(EXTRA_MESSAGE, message);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
@@ -172,21 +211,24 @@ public final class ServerCommunicationService extends IntentService {
             return;
         }
         Log.d(TAG, "Getting messages succeeded");
-        broadcastMessages(messages);
+        broadcastGetMessagesSucceeded(messages);
     }
 
-    private void broadcastMessages(ArrayList<Message> messages) {
+    private void broadcastGetMessagesSucceeded(ArrayList<Message> messages) {
         Intent intent = new Intent(BROADCAST_GET_MESSAGES_SUCCEEDED);
         intent.putParcelableArrayListExtra(EXTRA_MESSAGES, messages);
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
     }
 
     private HttpResponse sendRequest(HttpRequestBase request, Uri baseAddress, String path) throws IOException {
-        Uri uri = baseAddress.buildUpon().appendPath(path).build();
+        Uri uri = baseAddress
+                .buildUpon()
+                .appendEncodedPath(path)
+                .build();
         request.setURI(URI.create(uri.toString()));
         HttpParams httpParams = new BasicHttpParams();
         HttpConnectionParams.setConnectionTimeout(httpParams, TIMEOUT);
-        Log.d(TAG, String.format("Sending request %s", request.getURI()));
+        Log.d(TAG, String.format("Sending %s request to %s", request.getMethod(), request.getURI()));
         return new DefaultHttpClient(httpParams).execute(request);
     }
 
