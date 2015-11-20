@@ -3,20 +3,29 @@ package com.conradreuter.smswallmanager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Bundle;
+import android.support.v4.content.LocalBroadcastManager;
 import android.telephony.SmsMessage;
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.Collection;
 
-public class SmsBroadcastReceiver extends BroadcastReceiver {
+public final class SmsBroadcastReceiver extends BroadcastReceiver {
+
+    private static final String TAG = SmsBroadcastReceiver.class.getSimpleName();
+
+    public static final String BROADCAST_INCOMING_MESSAGE = "com.conradreuter.smswallmanager.action.INCOMING_MESSAGE";
+
+    public static final IntentFilter INTENT_FILTER = new IntentFilter(BROADCAST_INCOMING_MESSAGE);
 
     @Override
     public void onReceive(Context context, Intent intent) {
         final Collection<SmsMessage> smsMessages = getSmsMessages(intent.getExtras());
         for(SmsMessage smsMessage : smsMessages) {
             Message message = Message.fromSms(smsMessage);
-            MessagesService.startActionPutMessage(context, message);
+            broadcastMessage(context, message);
         }
     }
 
@@ -29,5 +38,15 @@ public class SmsBroadcastReceiver extends BroadcastReceiver {
             smsMessages.add(smsMessage);
         }
         return smsMessages;
+    }
+
+    private void broadcastMessage(Context context, Message message) {
+        Log.d(TAG, String.format(
+                "Incoming message %s from %s",
+                message.getText(),
+                message.getSender()));
+        Intent intent = new Intent(BROADCAST_INCOMING_MESSAGE);
+        message.fillIntent(intent);
+        LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
     }
 }

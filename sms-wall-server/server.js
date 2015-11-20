@@ -5,8 +5,12 @@ const server = require('http').Server(app);
 const io = require('socket.io')(server);
 app.use(require('body-parser').text());
 
-app.get('/', function (req, res) {
+app.get('/', function(req, res) {
   res.sendFile(__dirname + '/index.html');
+});
+
+app.get('/ping', function(req, res) {
+  res.send("pong");
 });
 
 app.get('/message', function(req, res) {

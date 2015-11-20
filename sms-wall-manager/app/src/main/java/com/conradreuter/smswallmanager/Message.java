@@ -1,27 +1,29 @@
 package com.conradreuter.smswallmanager;
 
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.support.v4.content.LocalBroadcastManager;
 import android.telephony.SmsMessage;
 import android.util.JsonReader;
+import android.util.Log;
 
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.DefaultHttpClient;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URI;
 
-public class Message {
+public final class Message {
 
-    private static final String BROADCAST_NEW_MESSAGE = "com.conradreuter.smswallmanager.broadcast.NEW_MESSAGE";
+    private static final String TAG = Message.class.getSimpleName();
 
     private static final String EXTRA_ID = "com.conradreuter.smswallmanager.extra.MESSAGE_ID";
     private static final String EXTRA_SENDER = "com.conradreuter.smswallmanager.extra.MESSAGE_SENDER";
     private static final String EXTRA_TEXT = "com.conradreuter.smswallmanager.extra.MESSAGE_TEXT";
-
-    public static final IntentFilter INTENT_FILTER = new IntentFilter(BROADCAST_NEW_MESSAGE);
 
     private Integer id;
     private String sender;
@@ -67,12 +69,6 @@ public class Message {
         return new Message(id == -1 ?  null : id, sender, text);
     }
 
-    public void fillIntent(Intent intent) {
-        intent.putExtra(EXTRA_ID, getId());
-        intent.putExtra(EXTRA_SENDER, getSender());
-        intent.putExtra(EXTRA_TEXT, getText());
-    }
-
     public Integer getId() {
         return id;
     }
@@ -85,9 +81,30 @@ public class Message {
         return text;
     }
 
-    public void broadcast(Context context) {
-        Intent intent = new Intent(BROADCAST_NEW_MESSAGE);
-        fillIntent(intent);
-        LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
+    public void fillIntent(Intent intent) {
+        intent.putExtra(EXTRA_ID, getId());
+        intent.putExtra(EXTRA_SENDER, getSender());
+        intent.putExtra(EXTRA_TEXT, getText());
+    }
+
+    public boolean put(URI baseAddress) {
+        HttpResponse response;
+        try {
+            HttpPut request = new HttpPut(baseAddress.resolve("/message"));
+            request.setEntity(new StringEntity(getText()));
+            response = new DefaultHttpClient().execute(request);
+        } catch (Exception e) {
+            Log.e(TAG, "Putting message failed", e);
+            return false;
+        }
+        if (response.getStatusLine().getStatusCode() != HttpStatus.SC_CREATED) {
+            Log.e(TAG, String.format(
+                    "Putting message failed with unexpected status code %d (reason: %s)",
+                    response.getStatusLine().getStatusCode(),
+                    response.getStatusLine().getReasonPhrase()));
+            return false;
+        }
+        Log.d(TAG, "Putting message succeeded");
+        return true;
     }
 }
