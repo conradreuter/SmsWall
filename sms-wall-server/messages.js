@@ -3,10 +3,12 @@ module.exports = {
   onChange: addChangeCallback,
   get: getMessages,
   put: putMessage,
-  delete: deleteMessage
+  delete: deleteMessage,
+  getWelcome: getWelcome
 };
 
 const FILENAME = 'messages.txt';
+const WELCOME_FILENAME = 'welcome.txt';
 const fs = require('fs');
 const _ = require('lodash');
 
@@ -60,4 +62,11 @@ function deleteMessage(id, callback) {
   } else {
     callback(undefined);
   }
+}
+
+function getWelcome(callback) {
+  fs.readFile(WELCOME_FILENAME, function(err, data) {
+    var welcomeMessage = (!err) ? data.toString() : 'SMS Wall';
+    callback(welcomeMessage);
+  });
 }

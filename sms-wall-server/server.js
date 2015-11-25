@@ -61,6 +61,6 @@ messages.load(function(msgs) {
   });
   io.on('connection', function(socket) {
     socket.emit('messages', msgs);
-    socket.emit('welcome', welcomeMessage);
+    messages.getWelcome(socket.emit.bind(socket, 'welcome'));
   })
 });
